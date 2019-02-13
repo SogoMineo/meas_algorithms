@@ -719,16 +719,16 @@ class LoadReferenceObjectsTask(pipeBase.Task, metaclass=abc.ABCMeta):
     - coord: ICRS position of star on sky (an lsst.geom.SpherePoint)
     - centroid: position of star on an exposure, if relevant (an lsst.afw.Point2D)
     - hasCentroid: is centroid usable? (a Flag)
-    - *referenceFilterName*_flux: brightness in the specified reference catalog filter (Jy)
-        Note: the function lsst.afw.image.abMagFromFlux will convert flux in Jy to AB Magnitude.
-    - *referenceFilterName*_fluxErr (optional): brightness standard deviation (Jy);
+    - *referenceFilterName*_flux: brightness in the specified reference catalog filter (nJy)
+        Note: the function lsst.afw.image.abMagFromFlux will convert flux in nJy to AB Magnitude.
+    - *referenceFilterName*_fluxErr (optional): brightness standard deviation (nJy);
         omitted if no data is available; possibly nan if data is available for some objects but not others
-    - camFlux: brightness in default camera filter (Jy); omitted if defaultFilter not specified
+    - camFlux: brightness in default camera filter (nJy); omitted if defaultFilter not specified
     - camFluxErr: brightness standard deviation for default camera filter;
         omitted if defaultFilter not specified or standard deviation not available that filter
-    - *cameraFilterName*_camFlux: brightness in specified camera filter (Jy)
+    - *cameraFilterName*_camFlux: brightness in specified camera filter (nJy)
     - *cameraFilterName*_camFluxErr (optional): brightness standard deviation
-        in specified camera filter (Jy); omitted if no data is available;
+        in specified camera filter (nJy); omitted if no data is available;
         possibly nan if data is available for some objects but not others
     - photometric (optional): is the object usable for photometric calibration? (a Flag)
     - resolved (optional): is the object spatially resolved? (a Flag)
@@ -1028,14 +1028,14 @@ class LoadReferenceObjectsTask(pipeBase.Task, metaclass=abc.ABCMeta):
                 field="%s_flux" % (filterName,),
                 type=numpy.float64,
                 doc="flux in filter %s" % (filterName,),
-                units="Jy",
+                units="nJy",
             )
         for filterName in filterNameList:
             schema.addField(
                 field="%s_fluxErr" % (filterName,),
                 type=numpy.float64,
                 doc="flux uncertainty in filter %s" % (filterName,),
-                units="Jy",
+                units="nJy",
             )
         if addIsPhotometric:
             schema.addField(
