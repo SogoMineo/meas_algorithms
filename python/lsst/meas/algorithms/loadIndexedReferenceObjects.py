@@ -67,6 +67,13 @@ class LoadIndexedReferenceObjectsTask(LoadReferenceObjectsTask):
         refCat = self.butler.get('ref_cat',
                                  dataId=self.indexer.makeDataId('master_schema', self.ref_dataset_name),
                                  immediate=True)
+
+        if not self.checkFluxUnits(refCat.schema):
+            msg = "Found invalid flux units in reference catalog schema:"
+            " run `meas_algorithms/bin/convert_refcat_to_nJy.py` to convert your"
+            " reference catalog fluxes from Jy to nJy."
+            raise ValueError(msg)
+
         self._addFluxAliases(refCat.schema)
         fluxField = getRefFluxField(schema=refCat.schema, filterName=filterName)
         for shard, isOnBoundary in zip(shards, isOnBoundaryList):

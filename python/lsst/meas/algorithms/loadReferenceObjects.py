@@ -782,6 +782,15 @@ class LoadReferenceObjectsTask(pipeBase.Task, metaclass=abc.ABCMeta):
         pipeBase.Task.__init__(self, *args, **kwargs)
         self.butler = butler
 
+    @staticmethod
+    def checkFluxUnits(schema):
+        """Return True if the units of all flux and fluxErr are correct (nJy).
+        """
+        for field in schema:
+            if '_flux' in field.field.getName() and field.field.getUnits() != 'nJy':
+                return False
+        return True
+
     @pipeBase.timeMethod
     def loadPixelBox(self, bbox, wcs, filterName=None, calib=None, epoch=None):
         """Load reference objects that overlap a rectangular pixel region.

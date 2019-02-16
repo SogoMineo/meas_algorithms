@@ -155,6 +155,16 @@ class TestLoadReferenceObjects(lsst.utils.tests.TestCase):
                     with self.assertRaises(RuntimeError):
                         getRefFluxKeys(refSchema, "camr")
 
+    def testRejectOldFluxes(self):
+        schema = LoadReferenceObjectsTask.makeMinimalSchema(['r', 'z'])
+        self.assertTrue(LoadReferenceObjectsTask.checkFluxUnits(schema))
+        schema.addField('bad_flux', doc='bad flux units', type=float, units='')
+        self.assertFalse(LoadReferenceObjectsTask.checkFluxUnits(schema))
+        schema.addField('bad_flux2', doc='bad flux units', type=float, units='Jy')
+        self.assertFalse(LoadReferenceObjectsTask.checkFluxUnits(schema))
+        schema.addField('bad_fluxErr', doc='bad flux units', type=float, units='')
+        self.assertFalse(LoadReferenceObjectsTask.checkFluxUnits(schema))
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
