@@ -186,6 +186,35 @@ class DynamicDetectionTask(SourceDetectionTask):
             Results from preliminary detection pass.
         """
         maskedImage = exposure.maskedImage
+        psf = self.getPsf(exposure, sigma=sigma)
+
+        # random seed needs to fit in a C++ 'int' so pybind doesn't choke on it
+        seed = (expId if expId is not None else int(maskedImage.image.array.sum())) % (2**31 - 1)
+
+        # We want to keep any large-scale background (e.g., scattered light from bright stars)
+        # from being selected for sky objects in the calculation,
+        # so do a preliminary detection pass without either the local or wide
+        # temporary background subtraction; the DETECTED pixels will mark
+        # the area to ignore.
+        originalMask = maskedImage.mask.array.copy()
+        try:
+            self.clearMask(exposure.mask)
+            convolveResults = self.convolveImage(maskedImage, psf, doSmooth=doSmooth)
+            tweakDetResults = self.applyThreshold(convolveResults.middle, maskedImage.getBBox(), self.config.prelimThresholdFactor)
+            self.finalizeFootprints(maskedImage.mask, tweakDetResults, convolveResults.sigma, self.config.prelimThresholdFactor)
+            # Calculate the proper threshold
+            threshResults = self.calculateThreshold(exposure, seed, sigma=convolveResults.sigma)
+            bgLevel = threshResults.additive
+            factor = threshResults.multiplicative
+            self.log.info("Modifying configured detection threshold by factor %f to %f",
+                          factor, factor*self.config.thresholdValue)
+
+        finally:
+            maskedImage.mask.array[:] = originalMask
+
+        background = lsst.afw.math.BackgroundList()
+        if self.config.doBackgroundTweak:
+            self.tweakBackground(exposure, bgLevel, background)
 
         if clearMask:
             self.clearMask(maskedImage.mask)
@@ -196,32 +225,11 @@ class DynamicDetectionTask(SourceDetectionTask):
         with self.tempWideBackgroundContext(exposure):
             # Could potentially smooth with a wider kernel than the PSF in order to better pick up the
             # wings of stars and galaxies, but for now sticking with the PSF as that's more simple.
-            psf = self.getPsf(exposure, sigma=sigma)
             convolveResults = self.convolveImage(maskedImage, psf, doSmooth=doSmooth)
             middle = convolveResults.middle
             sigma = convolveResults.sigma
-            prelim = self.applyThreshold(middle, maskedImage.getBBox(), self.config.prelimThresholdFactor)
-            self.finalizeFootprints(maskedImage.mask, prelim, sigma, self.config.prelimThresholdFactor)
-
-            # Calculate the proper threshold
-            # seed needs to fit in a C++ 'int' so pybind doesn't choke on it
-            seed = (expId if expId is not None else int(maskedImage.image.array.sum())) % (2**31 - 1)
-            threshResults = self.calculateThreshold(exposure, seed, sigma=sigma)
-            factor = threshResults.multiplicative
-            self.log.info("Modifying configured detection threshold by factor %f to %f",
-                          factor, factor*self.config.thresholdValue)
-            if self.config.doBackgroundTweak:
-                self.tweakBackground(exposure, threshResults.additive)
-
-            # Blow away preliminary (low threshold) detection mask
-            self.clearMask(maskedImage.mask)
-            if not clearMask:
-                maskedImage.mask.array |= oldDetected
-
-            # Rinse and repeat thresholding with new calculated threshold
             results = self.applyThreshold(middle, maskedImage.getBBox(), factor)
-            results.prelim = prelim
-            results.background = lsst.afw.math.BackgroundList()
+            results.background = background
             if self.config.doTempLocalBackground:
                 self.applyTempLocalBackground(exposure, middle, results)
             self.finalizeFootprints(maskedImage.mask, results, sigma, factor)
@@ -232,24 +240,6 @@ class DynamicDetectionTask(SourceDetectionTask):
             self.reEstimateBackground(maskedImage, results.background)
 
         self.display(exposure, results, middle)
-
-        if self.config.doBackgroundTweak:
-            # Re-do the background tweak after any temporary backgrounds have been restored
-            #
-            # But we want to keep any large-scale background (e.g., scattered light from bright stars)
-            # from being selected for sky objects in the calculation, so do another detection pass without
-            # either the local or wide temporary background subtraction; the DETECTED pixels will mark
-            # the area to ignore.
-            originalMask = maskedImage.mask.array.copy()
-            try:
-                self.clearMask(exposure.mask)
-                convolveResults = self.convolveImage(maskedImage, psf, doSmooth=doSmooth)
-                tweakDetResults = self.applyThreshold(convolveResults.middle, maskedImage.getBBox(), factor)
-                self.finalizeFootprints(maskedImage.mask, tweakDetResults, sigma, factor)
-                bgLevel = self.calculateThreshold(exposure, seed, sigma=sigma).additive
-            finally:
-                maskedImage.mask.array[:] = originalMask
-            self.tweakBackground(exposure, bgLevel, results.background)
 
         return results
 
